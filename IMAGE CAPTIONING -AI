@@ -1,0 +1,126 @@
+import tensorflow as tf
+from tensorflow.keras.applications import InceptionV3
+from tensorflow.keras.models import Model
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.layers import Embedding, LSTM, Dense, Add
+from tensorflow.keras import Input
+import numpy as np
+import os
+from PIL import Image
+import matplotlib.pyplot as plt
+
+# Load InceptionV3 model pre-trained on ImageNet and remove the top classification layer
+def build_cnn_model():
+    base_model = InceptionV3(weights='imagenet')
+    model = Model(inputs=base_model.input, outputs=base_model.layers[-2].output)  # Extract the second last layer
+    return model
+
+# Preprocess the image for InceptionV3
+def preprocess_image(image_path):
+    img = Image.open(image_path).resize((299, 299))
+    img = np.array(img) / 255.0
+    img = np.expand_dims(img, axis=0)
+    return img
+
+# Extract features from an image
+def extract_features(image_path, cnn_model):
+    img = preprocess_image(image_path)
+    features = cnn_model.predict(img)
+    return features
+
+# Prepare the RNN model for caption generation
+def build_rnn_model(vocab_size, max_length, embedding_dim=256, units=512):
+    image_input = Input(shape=(2048,))
+    image_embedding = Dense(embedding_dim, activation='relu')(image_input)
+    
+    caption_input = Input(shape=(max_length,))
+    caption_embedding = Embedding(input_dim=vocab_size, output_dim=embedding_dim, mask_zero=True)(caption_input)
+    
+    caption_lstm = LSTM(units, return_sequences=True)(caption_embedding)
+    caption_lstm = LSTM(units)(caption_lstm)
+    
+    combined = Add()([image_embedding, caption_lstm])
+    output = Dense(vocab_size, activation='softmax')(combined)
+    
+    model = Model(inputs=[image_input, caption_input], outputs=output)
+    return model
+
+# Generate a caption using greedy search
+def generate_caption(model, tokenizer, image_features, max_length):
+    start_token = "startseq"
+    end_token = "endseq"
+    caption = [start_token]
+    
+    for _ in range(max_length):
+        sequence = tokenizer.texts_to_sequences([caption])[0]
+        sequence = pad_sequences([sequence], maxlen=max_length)
+        yhat = model.predict([image_features, sequence], verbose=0)
+        word_index = np.argmax(yhat)
+        word = tokenizer.index_word[word_index]
+        
+        if word == end_token:
+            break
+        caption.append(word)
+        
+    return ' '.join(caption[1:])
+
+# Load images, captions, and tokenizer
+def load_dataset():
+    # Placeholder: Use your dataset loader here
+    images = ['path_to_image1.jpg', 'path_to_image2.jpg']  # Example image paths
+    captions = ['startseq a dog running in the park endseq', 'startseq a man riding a bike endseq']  # Example captions
+    tokenizer = Tokenizer()
+    tokenizer.fit_on_texts(captions)
+    max_length = max(len(caption.split()) for caption in captions)
+    
+    return images, captions, tokenizer, max_length
+
+# Training process (simplified)
+def train_model():
+    # Load dataset
+    images, captions, tokenizer, max_length = load_dataset()
+    vocab_size = len(tokenizer.word_index) + 1  # Vocabulary size
+    
+    # Load pre-trained CNN model
+    cnn_model = build_cnn_model()
+    
+    # Prepare the RNN model
+    rnn_model = build_rnn_model(vocab_size, max_length)
+    rnn_model.compile(loss='categorical_crossentropy', optimizer='adam')
+    
+    # Training loop (simplified)
+    for epoch in range(10):
+        for img_path, caption in zip(images, captions):
+            image_features = extract_features(img_path, cnn_model)
+            seq = tokenizer.texts_to_sequences([caption])[0]
+            seq = pad_sequences([seq], maxlen=max_length)
+            
+            # Target is the next word in the sequence
+            rnn_model.fit([image_features, seq[:, :-1]], seq[:, -1], epochs=1)
+
+# Test the model (caption generation)
+def test_model(image_path, cnn_model, rnn_model, tokenizer, max_length):
+    image_features = extract_features(image_path, cnn_model)
+    caption = generate_caption(rnn_model, tokenizer, image_features, max_length)
+    print("Generated Caption:", caption)
+    
+    # Display the image
+    img = Image.open(image_path)
+    plt.imshow(img)
+    plt.axis('off')
+    plt.show()
+
+# Main function to train and test the model
+if __name__ == "__main__":
+    # Train the model
+    train_model()
+
+    # Test on a new image
+    test_image_path = 'path_to_test_image.jpg'
+    cnn_model = build_cnn_model()
+    rnn_model = build_rnn_model(vocab_size=10000, max_length=34)  # Adjust based on your model
+    tokenizer = Tokenizer()  # Load your trained tokenizer here
+    max_length = 34  # Adjust based on your data
+
+    test_model(test_image_path, cnn_model, rnn_model, tokenizer, max_length)
