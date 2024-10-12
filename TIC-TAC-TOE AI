@@ -1,0 +1,124 @@
+import math
+
+# Define the board and players
+board = [' ' for _ in range(9)]  # 3x3 tic-tac-toe board
+current_winner = None  # to keep track of the winner!
+
+def print_board():
+    # This function prints the board
+    for row in [board[i * 3:(i + 1) * 3] for i in range(3)]:
+        print('| ' + ' | '.join(row) + ' |')
+
+def available_moves():
+    # Return a list of available moves (open spots)
+    return [i for i, spot in enumerate(board) if spot == ' ']
+
+def empty_squares():
+    # Return boolean indicating if there are any empty squares left
+    return ' ' in board
+
+def num_empty_squares():
+    # Return the number of empty squares
+    return len(available_moves())
+
+def make_move(square, letter):
+    # If valid move, then assign the square to the letter (X or O)
+    # Then return True, if invalid return False
+    if board[square] == ' ':
+        board[square] = letter
+        if winner(square, letter):
+            global current_winner
+            current_winner = letter
+        return True
+    return False
+
+def winner(square, letter):
+    # Check if the current player has won
+    # Check the row
+    row_ind = square // 3
+    row = board[row_ind * 3:(row_ind + 1) * 3]
+    if all([spot == letter for spot in row]):
+        return True
+    # Check the column
+    col_ind = square % 3
+    column = [board[col_ind + i * 3] for i in range(3)]
+    if all([spot == letter for spot in column]):
+        return True
+    # Check the diagonals
+    if square % 2 == 0:
+        diagonal1 = [board[i] for i in [0, 4, 8]]  # left-to-right diagonal
+        if all([spot == letter for spot in diagonal1]):
+            return True
+        diagonal2 = [board[i] for i in [2, 4, 6]]  # right-to-left diagonal
+        if all([spot == letter for spot in diagonal2]):
+            return True
+    return False
+
+def minimax(state, player):
+    max_player = 'X'  # AI is X
+    other_player = 'O' if player == 'X' else 'X'
+
+    # Check if the previous move is a winner
+    if current_winner == other_player:
+        return {'position': None, 'score': 1 * (num_empty_squares() + 1) if other_player == max_player else -1 * (num_empty_squares() + 1)}
+    elif not empty_squares():  # no empty squares
+        return {'position': None, 'score': 0}
+
+    # Initialize the best move
+    if player == max_player:
+        best = {'position': None, 'score': -math.inf}  # maximizing
+    else:
+        best = {'position': None, 'score': math.inf}  # minimizing
+
+    for possible_move in available_moves():
+        # Make the move
+        board[possible_move] = player
+        # Recurse using minimax to simulate a game after making that move
+        sim_score = minimax(board, other_player)  # simulate a game after the move
+
+        # Undo the move
+        board[possible_move] = ' '
+        sim_score['position'] = possible_move  # this represents the move optimal move
+
+        # Update the best move based on who the player is
+        if player == max_player:  # maximize the max_player (AI)
+            if sim_score['score'] > best['score']:
+                best = sim_score
+        else:  # minimize the other player
+            if sim_score['score'] < best['score']:
+                best = sim_score
+
+    return best
+
+def play_game():
+    print("Welcome to Tic Tac Toe!")
+    print_board()
+
+    while empty_squares():
+        # Get human input (O player)
+        square = int(input('Enter your move (0-8): '))
+        if square not in available_moves():
+            print("Invalid move! Try again.")
+            continue
+        make_move(square, 'O')
+        print_board()
+
+        if current_winner:
+            print('O wins!')
+            return
+
+        # AI makes a move (X player)
+        if empty_squares():
+            print('AI is making a move...')
+            ai_move = minimax(board, 'X')['position']
+            make_move(ai_move, 'X')
+            print_board()
+
+            if current_winner:
+                print('X wins! AI wins!')
+                return
+
+    print("It's a tie!")
+
+if __name__ == '__main__':
+    play_game()
