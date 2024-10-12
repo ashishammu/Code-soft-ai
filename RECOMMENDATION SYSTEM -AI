@@ -1,0 +1,92 @@
+# Import necessary libraries
+from surprise import Dataset, Reader
+from surprise import SVD
+from surprise.model_selection import train_test_split
+from surprise.model_selection import cross_validate
+from surprise import accuracy
+from surprise.model_selection import KFold
+
+# Load the dataset
+def load_data():
+    # Load the MovieLens 100k dataset or use your own dataset
+    data = Dataset.load_builtin('ml-100k')
+    return data
+
+# Train/Test split for evaluation
+def train_test_split_data(data):
+    trainset, testset = train_test_split(data, test_size=0.25)
+    return trainset, testset
+
+# Train the recommendation model using SVD
+def train_model(trainset):
+    model = SVD()
+    model.fit(trainset)
+    return model
+
+# Evaluate the model using RMSE
+def evaluate_model(model, testset):
+    predictions = model.test(testset)
+    rmse = accuracy.rmse(predictions)
+    return rmse
+
+# Cross-validate the model
+def cross_validate_model(data):
+    model = SVD()
+    results = cross_validate(model, data, measures=['RMSE', 'MAE'], cv=5, verbose=True)
+    return results
+
+# Get top-N movie recommendations for a specific user
+def get_recommendations(model, user_id, top_n=10):
+    movie_ids = []
+    for movie_id in range(1, 1683):  # MovieLens 100k has movie IDs from 1 to 1682
+        movie_ids.append(movie_id)
+        
+    predictions = [(movie_id, model.predict(user_id, movie_id).est) for movie_id in movie_ids]
+    predictions.sort(key=lambda x: x[1], reverse=True)
+    
+    top_recommendations = predictions[:top_n]
+    return top_recommendations
+
+# Main function to run the recommendation system
+def main():
+    # Load and prepare the data
+    data = load_data()
+
+    # Split the data into training and testing sets
+    trainset, testset = train_test_split_data(data)
+
+    # Train the model
+    model = train_model(trainset)
+
+    # Evaluate the model
+    print("Evaluating the model...")
+    evaluate_model(model, testset)
+
+    # Cross-validation to assess performance
+    print("Cross-validating the model...")
+    cross_validate_model(data)
+
+    # Provide top-N recommendations for a specific user
+    user_id = str(input("Enter a user ID to get recommendations: "))  # MovieLens uses user IDs as strings
+    top_recommendations = get_recommendations(model, user_id, top_n=10)
+
+    print(f"\nTop 10 movie recommendations for User {user_id}:")
+    for movie_id, rating in top_recommendations:
+        print(f"Movie ID: {movie_id}, Predicted Rating: {rating:.2f}")
+
+if __name__ == '__main__':
+    main()
+
+
+           
+
+import pandas as pd
+from surprise import Dataset, Reader
+
+# Load custom dataset
+def load_custom_data(file_path):
+    # Assuming the dataset has columns: user_id, item_id, rating
+    df = pd.read_csv(file_path)
+    reader = Reader(rating_scale=(1, 5))  # Specify your rating scale here
+    data = Dataset.load_from_df(df[['user_id', 'item_id', 'rating']], reader)
+    return data
